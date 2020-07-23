@@ -8,8 +8,10 @@ import com.softwareverde.bitcoin.block.validator.BlockValidationResult;
 import com.softwareverde.bitcoin.block.validator.BlockValidator;
 import com.softwareverde.bitcoin.block.validator.ValidationResult;
 import com.softwareverde.bitcoin.block.validator.difficulty.DifficultyCalculator;
+import com.softwareverde.bitcoin.block.validator.difficulty.DifficultyCalculatorDatabaseContext;
 import com.softwareverde.bitcoin.chain.segment.BlockchainSegmentId;
 import com.softwareverde.bitcoin.chain.time.MedianBlockTime;
+import com.softwareverde.bitcoin.context.DifficultyCalculatorContext;
 import com.softwareverde.bitcoin.server.database.DatabaseConnection;
 import com.softwareverde.bitcoin.server.module.node.BlockCache;
 import com.softwareverde.bitcoin.server.module.node.database.DatabaseManager;
@@ -349,8 +351,14 @@ public class RpcDataHandler implements NodeRpcHandler.DataHandler {
     @Override
     public Difficulty getDifficulty() {
         try (final DatabaseManager databaseManager = _databaseManagerFactory.newDatabaseManager()) {
-            final DifficultyCalculator difficultyCalculator = new DifficultyCalculator(databaseManager);
-            return difficultyCalculator.calculateRequiredDifficulty();
+            final BlockHeaderDatabaseManager blockHeaderDatabaseManager = databaseManager.getBlockHeaderDatabaseManager();
+            final BlockId headBlockId = blockHeaderDatabaseManager.getHeadBlockHeaderId();
+            final Long headBlockHeight = blockHeaderDatabaseManager.getBlockHeight(headBlockId);
+            final Long blockHeight = (headBlockHeight + 1L);
+
+            final DifficultyCalculatorContext difficultyCalculatorContext = new DifficultyCalculatorDatabaseContext(databaseManager);
+            final DifficultyCalculator difficultyCalculator = new DifficultyCalculator(difficultyCalculatorContext);
+            return difficultyCalculator.calculateRequiredDifficulty(blockHeight);
         }
         catch (final DatabaseException exception) {
             Logger.warn(exception);
