@@ -103,12 +103,44 @@ CREATE TABLE blocks (
     INDEX blocks_work_ix3 (blockchain_segment_id, chain_work DESC) USING BTREE
 ) ENGINE=InnoDB DEFAULT CHARSET=LATIN1;
 
+CREATE VIEW invalidated_blockchains AS (
+    SELECT
+        blockchain_segments.invalid_blockchain_segment_id AS blockchain_segment_id, blocks.block_height, blocks.id AS invalidated_by_block_id, blocks.hash AS invalidated_by_block_hash
+    FROM
+        invalid_blocks
+        INNER JOIN blocks
+            ON blocks.hash = invalid_blocks.hash
+        INNER JOIN (
+            SELECT
+                A.id AS blockchain_segment_id, B.id AS invalid_blockchain_segment_id
+            FROM
+                ( SELECT id, nested_set_left, nested_set_right FROM blockchain_segments ) AS A,
+                ( SELECT id, nested_set_left, nested_set_right FROM blockchain_segments ) AS B
+            WHERE
+                (A.nested_set_left <= B.nested_set_left AND A.nested_set_right >= B.nested_set_right) = 1
+        ) AS blockchain_segments
+            ON blockchain_segments.blockchain_segment_id = blocks.blockchain_segment_id
+    WHERE
+        invalid_blocks.process_count >= 3
+);
+
 CREATE VIEW head_block_header AS (
     SELECT
         blocks.id, blocks.hash, blocks.previous_block_id, blocks.block_height, blocks.blockchain_segment_id, blocks.chain_work
     FROM
         blocks
-        INNER JOIN ( SELECT chain_work FROM blocks ORDER BY chain_work DESC LIMIT 1 ) AS best_block_header_work
+        INNER JOIN (
+            SELECT
+                chain_work
+            FROM
+                blocks
+                LEFT OUTER JOIN invalidated_blockchains
+                    ON (blocks.blockchain_segment_id = invalidated_blockchains.blockchain_segment_id AND blocks.block_height >= invalidated_blockchains.block_height)
+            WHERE
+                invalidated_blockchains.blockchain_segment_id IS NULL
+            ORDER BY chain_work DESC
+            LIMIT 1
+        ) AS best_block_header_work
             ON (blocks.chain_work = best_block_header_work.chain_work)
     ORDER BY
         blocks.id ASC
@@ -120,8 +152,20 @@ CREATE VIEW head_block AS (
         blocks.id, blocks.hash, blocks.previous_block_id, blocks.block_height, blocks.blockchain_segment_id, blocks.chain_work
     FROM
         blocks
-        INNER JOIN ( SELECT chain_work FROM blocks WHERE has_transactions = 1 ORDER BY chain_work DESC LIMIT 1 ) AS best_block_work
-            ON blocks.chain_work = best_block_work.chain_work
+        INNER JOIN (
+            SELECT
+                chain_work
+            FROM
+                blocks
+                LEFT OUTER JOIN invalidated_blockchains
+                    ON (blocks.blockchain_segment_id = invalidated_blockchains.blockchain_segment_id AND blocks.block_height >= invalidated_blockchains.block_height)
+            WHERE
+                has_transactions = 1
+                AND invalidated_blockchains.blockchain_segment_id IS NULL
+            ORDER BY chain_work DESC
+            LIMIT 1
+        ) AS best_block_header_work
+            ON (blocks.chain_work = best_block_header_work.chain_work)
     ORDER BY
         blocks.id ASC
     LIMIT 1

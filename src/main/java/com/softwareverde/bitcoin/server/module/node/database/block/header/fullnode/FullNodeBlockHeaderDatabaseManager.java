@@ -815,16 +815,22 @@ public class FullNodeBlockHeaderDatabaseManager implements BlockHeaderDatabaseMa
 
         final Row row = rows.get(0);
         final Integer processCount = row.getInteger("process_count");
-        return (processCount >= 3);
+        return (processCount >= BlockHeaderDatabaseManager.INVALID_PROCESS_THRESHOLD);
     }
 
     @Override
     public void markBlockAsInvalid(final Sha256Hash blockHash) throws DatabaseException {
+        this.markBlockAsInvalid(blockHash, 1);
+    }
+
+    @Override
+    public void markBlockAsInvalid(final Sha256Hash blockHash, final Integer increaseProcessCountBy) throws DatabaseException {
         final DatabaseConnection databaseConnection = _databaseManager.getDatabaseConnection();
 
         databaseConnection.executeSql(
-            new Query("INSERT INTO invalid_blocks (hash, process_count) VALUES (?, 1) ON DUPLICATE KEY UPDATE process_count = process_count + 1")
+            new Query("INSERT INTO invalid_blocks (hash, process_count) VALUES (?, ?) ON DUPLICATE KEY UPDATE process_count = process_count + VALUES(process_count)")
                 .setParameter(blockHash)
+                .setParameter(increaseProcessCountBy)
         );
     }
 

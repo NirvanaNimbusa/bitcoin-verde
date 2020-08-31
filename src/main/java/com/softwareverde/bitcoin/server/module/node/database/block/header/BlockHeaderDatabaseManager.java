@@ -14,6 +14,7 @@ import java.util.Map;
 
 public interface BlockHeaderDatabaseManager {
     Object MUTEX = new Object();
+    Integer INVALID_PROCESS_THRESHOLD = 3; // The number of times a block must be processed as invalid before it is considered invalid.
 
     BlockId insertBlockHeader(BlockHeader blockHeader) throws DatabaseException;
     void updateBlockHeader(BlockId blockId, BlockHeader blockHeader) throws DatabaseException;
@@ -47,5 +48,6 @@ public interface BlockHeaderDatabaseManager {
 
     Boolean isBlockInvalid(Sha256Hash blockHash) throws DatabaseException;
     void markBlockAsInvalid(Sha256Hash blockHash) throws DatabaseException;
+    void markBlockAsInvalid(Sha256Hash blockHash, Integer increaseProcessCountBy) throws DatabaseException;
     void clearBlockAsInvalid(Sha256Hash blockHash) throws DatabaseException;
 }

@@ -129,6 +129,8 @@ public class NodeRpcHandler implements JsonSocketServer.SocketConnectedCallback 
 
         void submitTransaction(Transaction transaction);
         void submitBlock(Block block);
+        void reconsiderBlock(Sha256Hash blockHash);
+        void invalidateBlock(Sha256Hash blockHash);
     }
 
     public interface LogLevelSetter {
@@ -1246,6 +1248,54 @@ public class NodeRpcHandler implements JsonSocketServer.SocketConnectedCallback 
         response.put(WAS_SUCCESS_KEY, 1);
     }
 
+    // Requires POST: <blockHash>
+    protected void _invalidateBlock(final Json parameters, final Json response) {
+        final DataHandler dataHandler = _dataHandler;
+        if (dataHandler == null) {
+            response.put(ERROR_MESSAGE_KEY, "Operation not supported.");
+            return;
+        }
+
+        if (! parameters.hasKey("blockHash")) {
+            response.put(ERROR_MESSAGE_KEY, "Missing parameters. Required: blockHash");
+            return;
+        }
+
+        final Sha256Hash blockHash = Sha256Hash.fromHexString(parameters.getString("blockHash"));
+        if (blockHash == null) {
+            response.put(ERROR_MESSAGE_KEY, "Invalid Block hash.");
+            return;
+        }
+
+        dataHandler.invalidateBlock(blockHash);
+
+        response.put(WAS_SUCCESS_KEY, 1);
+    }
+
+    // Requires POST: <blockHash>
+    protected void _reconsiderBlock(final Json parameters, final Json response) {
+        final DataHandler dataHandler = _dataHandler;
+        if (dataHandler == null) {
+            response.put(ERROR_MESSAGE_KEY, "Operation not supported.");
+            return;
+        }
+
+        if (! parameters.hasKey("blockHash")) {
+            response.put(ERROR_MESSAGE_KEY, "Missing parameters. Required: blockHash");
+            return;
+        }
+
+        final Sha256Hash blockHash = Sha256Hash.fromHexString(parameters.getString("blockHash"));
+        if (blockHash == null) {
+            response.put(ERROR_MESSAGE_KEY, "Invalid Block hash.");
+            return;
+        }
+
+        dataHandler.reconsiderBlock(blockHash);
+
+        response.put(WAS_SUCCESS_KEY, 1);
+    }
+
     // Requires POST: <host>
     protected void _addIpToWhitelist(final Json parameters, final Json response) {
         final NodeHandler nodeHandler = _nodeHandler;
@@ -1705,9 +1755,15 @@ public class NodeRpcHandler implements JsonSocketServer.SocketConnectedCallback 
                                 _setLogLevel(parameters, response);
                             } break;
 
+                            case "RECONSIDER_BLOCK": {
+                                _reconsiderBlock(parameters, response);
+                            } break;
+
+                            case "INVALIDATE_BLOCK": {
+                                _invalidateBlock(parameters, response);
+                            } break;
+
                             // TODO: Add rebuild-UTXO set from block-height command.
-                            // TODO: Add reconsider block command.
-                            // TODO: Add invalidate block command.
 
                             default: {
                                 response.put(ERROR_MESSAGE_KEY, "Invalid " + method + " query: " + query);
